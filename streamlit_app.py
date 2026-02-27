@@ -1,5 +1,9 @@
-import streamlit as st
+import re
+import smtplib
+from email.mime.text import MIMEText
+
 import google.generativeai as genai
+import streamlit as st
 
 
 # Configuration Loader
@@ -17,6 +21,12 @@ def load_config():
     except KeyError as e:
         st.error(f"Missing configuration: {e}")
         st.stop()
+
+
+def extract_email(text):
+    pattern = r"[\w\.-]+@[\w\.-]+\.\w+"
+    match = re.search(pattern, text)
+    return match.group(0) if match else None
 
 
 # Model Initialization
@@ -50,6 +60,27 @@ def display_chat_history(chat_session):
             st.markdown(message.parts[0].text)
 
 
+def send_notification_to_me(recruiter_email):
+    sender = st.secrets["EMAIL_ADDRESS"]
+    password = st.secrets["EMAIL_PASSWORD"]
+
+    subject = "New Recruiter Lead from AI Agent"
+    body = f"""
+    A recruiter shared their email in your AI agent chat:
+
+    {recruiter_email}
+    """
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = sender
+    msg["To"] = sender
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(sender, password)
+        server.send_message(msg)
+
+
 # Main Application
 def main():
     config = load_config()
@@ -76,13 +107,17 @@ def main():
     display_chat_history(st.session_state.chat_session)
 
     # User Input
-    user_input = st.chat_input("Ask me anything about my work experience...")
+    user_input = st.chat_input("Curious how I got here? Ask away...")
 
     if user_input:
         # Display user message
         with st.chat_message("user"):
             st.markdown(user_input)
+        # Detect email silently
+        detected_email = extract_email(user_input)
 
+        if detected_email:
+            send_notification_to_me(detected_email)
         # Generate AI response
         with st.chat_message("assistant"):
             with st.spinner("Nidhi is typing..."):
